@@ -23,11 +23,24 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // every 60s
 // value: { clients:Set, agents:Set, status:'active'|'ended', createdAt:number, lastActivity:number, purgeTimer?:Timeout }
 const rooms = new Map();
 
-function rid(n=12){const c='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';return Array.from({length:n},()=>c[Math.floor(Math.random()*c.length)]).join('')}
+function rid(n=12){
+  const c='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return Array.from({length:n},()=>c[Math.floor(Math.random()*c.length)]).join('');
+}
 function now(){ return Date.now(); }
 function touch(id){ const r = rooms.get(id); if (r) r.lastActivity = now(); }
-function getBaseURL(req){const env=(process.env.PUBLIC_URL||'').trim(); if(env) return env.replace(/\/+$/,''); const proto=req.headers['x-forwarded-proto']||req.protocol||'https'; const host=req.headers['x-forwarded-host']||req.get('host'); return `${proto}://${host}`;}
-function deviceFromUA(ua=''){ if(/mobile|iphone|ipod|android(?!.*tablet)/i.test(ua)) return 'Mobile'; if(/ipad|tablet/i.test(ua)) return 'Tablet'; return 'Desktop'; }
+function getBaseURL(req){
+  const env=(process.env.PUBLIC_URL||'').trim();
+  if(env) return env.replace(/\/+$/,'');
+  const proto=req.headers['x-forwarded-proto']||req.protocol||'https';
+  const host=req.headers['x-forwarded-host']||req.get('host');
+  return `${proto}://${host}`;
+}
+function deviceFromUA(ua=''){
+  if(/mobile|iphone|ipod|android(?!.*tablet)/i.test(ua)) return 'Mobile';
+  if(/ipad|tablet/i.test(ua)) return 'Tablet';
+  return 'Desktop';
+}
 
 async function notifyDiscord(id, baseUrl, meta = {}) {
   if (!DISCORD_WEBHOOK_URL) return;
@@ -39,12 +52,22 @@ async function notifyDiscord(id, baseUrl, meta = {}) {
   if (meta.device) lines.push(`Device: ${meta.device}`);
   if (meta.ip) lines.push(`IP: ${meta.ip}`);
   try {
-    await fetch(DISCORD_WEBHOOK_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content: lines.join('\n') }) });
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ content: lines.join('\n') })
+    });
   } catch (e) { console.error('Discord webhook error', e); }
 }
 
 function makeRoom(id){
-  rooms.set(id, { clients:new Set(), agents:new Set(), status:'active', createdAt:now(), lastActivity:now() });
+  rooms.set(id, {
+    clients:new Set(),
+    agents:new Set(),
+    status:'active',
+    createdAt:now(),
+    lastActivity:now()
+  });
 }
 
 async function forceDisconnectAll(roomId){
@@ -75,21 +98,27 @@ app.get('/api/session-status', (req, res) => {
   return res.json({ status: r.status });
 });
 
-// Start session (requires header + optional answer)
+// ✅ FIXED: Start session (requires header + correct answer 'milo')
 app.post('/api/start-session', async (req, res) => {
   const fromPortal = req.get('x-portal-entry') === '1';
   if (!fromPortal) return res.status(403).json({ error: 'Forbidden' });
 
-  const answer = ((req.body && req.body.answer) || '').trim().toLowerCase();
-  if (answer && answer !== 'milo') return res.status(401).json({ error: 'Unauthorized' });
+  const answerRaw = (req.body?.answer ?? '').trim();
+  const answer = answerRaw.toLowerCase();
+
+  if (answer !== 'milo') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const id = rid();
   makeRoom(id);
+
   const base = getBaseURL(req);
   const ua = req.get('user-agent') || '';
   const device = deviceFromUA(ua);
   const xf = req.headers['x-forwarded-for'];
   const ip = Array.isArray(xf) ? xf[0] : (xf ? String(xf).split(',')[0].trim() : (req.ip || 'unknown'));
+
   notifyDiscord(id, base, { device, ip }).catch(()=>{});
   res.json({ id });
 });
