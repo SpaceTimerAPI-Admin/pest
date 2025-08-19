@@ -54,3 +54,25 @@ app.get('/health', (req,res)=> res.json({ ok:true }));
 
 // OPTIONAL password gate; keep/remove per your last setup:
 app.post('/api/s
+
+// add near other routes
+app.get('/api/expired-url', (req, res) => {
+  const url = (process.env.EXPIRED_REDIRECT_URL || '').trim() || '/expired';
+  res.json({ url });
+});
+
+app.post('/api/start-session', async (req, res) => {
+  // NEW: soft gate to ensure request came from our login flow
+  const fromPortal = req.get('x-portal-entry') === '1';
+  if (!fromPortal) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  // your existing password gate (keep if you want it)
+  const answer = ((req.body && req.body.answer) || '').trim().toLowerCase();
+  if (answer && answer !== 'milo') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // ... rest of your existing start-session logic ...
+});
